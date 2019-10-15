@@ -68,6 +68,13 @@ static uint32_t decode_shift_ldr_str(struct arm7 *arm7,
 
 static void arm7_error_set_regs(void *argptr);
 
+#define ARM7_INST_LUT_LEN (1 << 16)
+static arm7_op_fn washdc_arm7_inst_lut[ARM7_INST_LUT_LEN];
+
+static unsigned arm7_inst_tbl_hash(arm7_inst inst);
+static void arm7_init_inst_lut(void);
+static arm7_op_fn arm7_decode_slow(arm7_inst inst);
+
 static inline bool arm7_cond_eq(struct arm7 *arm7) {
     return (bool)(arm7->reg[ARM7_REG_CPSR] & ARM7_CPSR_Z_MASK);
 }
@@ -140,6 +147,8 @@ void arm7_init(struct arm7 *arm7,
     arm7->clk = clk;
     arm7->inst_mem = inst_mem;
 
+    arm7_init_inst_lut();
+
     arm7_error_callback.arg = arm7;
     arm7_error_callback.callback_fn = arm7_error_set_regs;
     error_add_callback(&arm7_error_callback);
@@ -177,11 +186,22 @@ void arm7_reset(struct arm7 *arm7, bool val) {
 #define MASK_STR (BIT_RANGE(26, 27) | (1 << 20))
 #define VAL_STR  0x04000000
 
-#define MASK_MRS (BIT_RANGE(23, 27) | BIT_RANGE(16, 21) | BIT_RANGE(0, 11))
-#define VAL_MRS  0x010f0000
+#define MASK_MRS (BIT_RANGE(23, 27) | BIT_RANGE(20, 21))
+#define VAL_MRS  0x01000000
 
-#define MASK_MSR (BIT_RANGE(23, 27) | BIT_RANGE(4, 21))
-#define VAL_MSR  (0x0129f000)
+/*
+ * the pedantic versions of MSR and MRS are used to test for instruction
+ * decoding correctness when INVARIANTS is enabled.  This way we can check bits
+ * which the spec needs to be set to specific values, but aren't actually
+ * necessary to make the instruction unique.
+ */
+#define MASK_MRS_PEDANTIC (BIT_RANGE(23, 27) | BIT_RANGE(16, 21) | BIT_RANGE(0, 11))
+#define VAL_MRS_PEDANTIC  0x010f0000
+#define MASK_MSR_PEDANTIC (BIT_RANGE(23, 27) | BIT_RANGE(4, 21))
+#define VAL_MSR_PEDANTIC  (0x0129f000)
+
+#define MASK_MSR (BIT_RANGE(23, 27) | BIT_RANGE(20, 21))
+#define VAL_MSR  (0x01200000)
 
 // data processing opcodes
 #define MASK_ORR (BIT_RANGE(21, 24) | BIT_RANGE(26, 27))
@@ -822,6 +842,17 @@ DEF_BLOCK_XFER_INST(le)
 DEF_BLOCK_XFER_INST(al)
 DEF_BLOCK_XFER_INST(nv)
 
+#ifdef INVARIANTS
+#define MRS_INVARIANTS_CHECK                                \
+    if ((inst & MASK_MRS_PEDANTIC) != VAL_MRS_PEDANTIC) {   \
+        error_set_arm7_inst(inst);                          \
+        error_set_arm7_pc(arm7->reg[ARM7_REG_PC]);          \
+        RAISE_ERROR(ERROR_INTEGRITY);                       \
+    }
+#else
+#define MRS_INVARIANTS_CHECK
+#endif
+
 /*
  * MRS
  * Copy CPSR (or SPSR) to a register
@@ -829,6 +860,7 @@ DEF_BLOCK_XFER_INST(nv)
 #define DEF_MRS_INST(cond)                                      \
     static unsigned                                             \
     arm7_inst_mrs_##cond(struct arm7 *arm7, arm7_inst inst) {   \
+        MRS_INVARIANTS_CHECK                                    \
         EVAL_COND(cond);                                        \
         bool src_psr = (1 << 22) & inst;                        \
         unsigned dst_reg = (inst >> 12) & 0xf;                  \
@@ -863,6 +895,17 @@ DEF_MRS_INST(le)
 DEF_MRS_INST(al)
 DEF_MRS_INST(nv)
 
+#ifdef INVARIANTS
+#define MSR_INVARIANTS_CHECK                                \
+    if ((inst & MASK_MSR_PEDANTIC) != VAL_MSR_PEDANTIC) {   \
+        error_set_arm7_inst(inst);                          \
+        error_set_arm7_pc(arm7->reg[ARM7_REG_PC]);          \
+        RAISE_ERROR(ERROR_INTEGRITY);                       \
+    }
+#else
+#define MSR_INVARIANTS_CHECK
+#endif
+
 /*
  * MSR
  * Copy a register to CPSR (or SPSR)
@@ -870,6 +913,7 @@ DEF_MRS_INST(nv)
 #define DEF_MSR_INST(cond)                                      \
     static unsigned                                             \
     arm7_inst_msr_##cond(struct arm7 *arm7, arm7_inst inst) {   \
+        MSR_INVARIANTS_CHECK                                    \
         EVAL_COND(cond);                                        \
         bool dst_psr = (1 << 22) & inst;                        \
                                                                 \
@@ -1133,7 +1177,43 @@ DEF_SWI_INST(le)
 DEF_SWI_INST(al)
 DEF_SWI_INST(nv)
 
+static unsigned arm7_inst_tbl_hash(arm7_inst inst) {
+    /*
+     * key on 21-27 (7-bits) + 4-7(4 bits) == 11 bits total add in 4 bits for
+     * the condition (28-31) == 15 bits total.
+     * also add in bit 20 because single-data-swap (currently unimplemented)
+     * uses that.
+     *
+     * So that's 12 contiguous bits from 20-31, and 4 contiguous bits from 4-7.
+     */
+    return ((inst >> 4) & 0xf) | ((inst >> 16) & 0xfff0);
+}
+
+static void arm7_init_inst_lut(void) {
+    cpu_inst_param hash;
+    for (hash = 0; hash < ARM7_INST_LUT_LEN; hash++) {
+        arm7_inst sample = ((hash & 0xfff0) << 16) | ((hash & 0xf) << 4);
+        washdc_arm7_inst_lut[hash] = arm7_decode_slow(sample);
+    }
+}
+
 arm7_op_fn arm7_decode(struct arm7 *arm7, arm7_inst inst) {
+    arm7_op_fn handler = washdc_arm7_inst_lut[arm7_inst_tbl_hash(inst)];
+#ifdef INVARIANTS
+    if (handler != arm7_decode_slow(inst)) {
+        error_set_arm7_inst(inst);
+        error_set_arm7_pc(arm7->reg[ARM7_REG_PC]);
+        RAISE_ERROR(ERROR_INTEGRITY);
+    }
+#endif
+    if (handler)
+        return handler;
+    error_set_arm7_inst(inst);
+    error_set_arm7_pc(arm7->reg[ARM7_REG_PC]);
+    RAISE_ERROR(ERROR_UNIMPLEMENTED);
+}
+
+static arm7_op_fn arm7_decode_slow(arm7_inst inst) {
     DEF_COND_TBL(branch);
     DEF_COND_TBL(ldr_str);
     DEF_COND_TBL(block_xfer);
@@ -1194,9 +1274,7 @@ arm7_op_fn arm7_decode(struct arm7 *arm7, arm7_inst inst) {
         return arm7_swi_cond_tbl[(inst >> 28) & 0xf];
     }
 
-    error_set_arm7_inst(inst);
-    error_set_arm7_pc(arm7->reg[ARM7_REG_PC]);
-    RAISE_ERROR(ERROR_UNIMPLEMENTED);
+    return NULL;
 }
 
 static uint32_t ror(uint32_t in, unsigned n_bits) {
