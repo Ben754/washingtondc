@@ -9,4 +9,4 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
-    - uses: snickerbockers/submodules-init@v1
+    - uses: snickerbockers/submodules-init@v3
