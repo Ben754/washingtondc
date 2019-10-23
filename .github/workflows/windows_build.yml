@@ -9,7 +9,7 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
-    - uses: snickerbockers/submodules-init@v3
+    - uses: snickerbockers/submodules-init@v4
     - uses: snickerbockers/cmake-configure@e8fe3ce1adfa46f35440575147ced6ba8dee9b25
       with:
         generator: 'MinGW Makefiles'

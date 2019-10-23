@@ -9,7 +9,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    - uses: snickerbockers/submodules-init@v3
+    - uses: snickerbockers/submodules-init@v4
     - uses: lpenz/ghaction-cmake@v0.1
       with:
          dependencies: libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libgl-dev libglu-dev libxi-dev
