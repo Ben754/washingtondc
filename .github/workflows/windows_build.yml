@@ -13,4 +13,4 @@ jobs:
     - uses: snickerbockers/cmake-configure@e8fe3ce1adfa46f35440575147ced6ba8dee9b25
       with:
         generator: 'MinGW Makefiles'
-    - uses: snickerbockers/run-mingw32-make@b3896af94175bb31daedaf7d14fdbc175ca77b01
+    - uses: snickerbockers/run-mingw32-make@bbd004aa8f33a89e80c9bbcb726b42aeddb0a001
