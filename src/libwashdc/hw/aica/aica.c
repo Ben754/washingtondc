@@ -399,7 +399,7 @@ aica_sys_reg_pre_read(struct aica *aica, unsigned idx, bool from_sh4) {
         break;
     case AICA_PLAYPOS:
         chan = aica->channels + aica->chan_sel;
-        aica->sys_reg[idx] = chan->sample_pos & 0xffff;
+        aica->sys_reg[idx] = chan->loop_end & 0xffff;
         LOG_DBG("Reading 0x%08x from AICA_PLAYPOS\n",
                 (unsigned)aica->sys_reg[idx]);
         break;
@@ -411,8 +411,8 @@ aica_sys_reg_pre_read(struct aica *aica, unsigned idx, bool from_sh4) {
         if (chan->atten > 0x3bf && chan->atten != 0x1fff)
             RAISE_ERROR(ERROR_INTEGRITY); // should have already been clamped
 
-        val = chan->atten | (((unsigned)chan->atten_env_state) << 13) |
-            (chan->loop_end_playstatus_flag ? (1 << 15) : 0);
+        val = 0x3bf | (((unsigned)AICA_ENV_RELEASE) << 13) |
+            (chan->loop_end_playstatus_flag ? (1 << 15) : 1<<15);
         chan->loop_end_playstatus_flag = false;
 
         memcpy(aica->sys_reg + idx, &val, sizeof(uint32_t));
@@ -677,7 +677,7 @@ static void aica_sys_channel_read(struct aica *aica, void *dst,
         memcpy(chan->raw + AICA_CHAN_PLAY_CTRL, &tmp, sizeof(tmp));
         break;
     case AICA_CHAN_SAMPLE_ADDR_LOW:
-        tmp = chan->addr_start & 0xffff;
+        tmp = chan->loop_end & 0xffff;
         memcpy(chan->raw + AICA_CHAN_SAMPLE_ADDR_LOW, &tmp, sizeof(tmp));
         break;
     case AICA_CHAN_LOOP_START:

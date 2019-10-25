@@ -39,7 +39,8 @@
 static void raise_ch2_dma_int_event_handler(struct SchedEvent *event);
 
 // this is arbitrary
-#define CH2_DMA_INT_DELAY 0
+/* #define CH2_DMA_INT_DELAY (SCHED_FREQUENCY / (1024*1024)) */
+#define CH2_DMA_INT_DELAY  (SCHED_FREQUENCY / (1024 * 8))
 
 struct SchedEvent raise_ch2_dma_int_event = {
     .handler = raise_ch2_dma_int_event_handler
