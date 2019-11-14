@@ -168,7 +168,7 @@ static struct g2_dma_ch dma_ch_dd = {
 };
 
 static uint32_t g2_dma_read_st(struct g2_dma_ch *ch) {
-    uint32_t val = ch->st;
+    uint32_t val = ch->xfer_in_progress ? 1 : 0;
     LOG_DBG("G2: Read 0x%08x from %sst\n", (unsigned)val, ch->name);
     return val;
 }
