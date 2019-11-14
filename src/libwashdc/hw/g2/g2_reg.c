@@ -207,6 +207,12 @@ static uint32_t g2_dma_read_tsel(struct g2_dma_ch *ch) {
 
 static void g2_dma_write_tsel(struct g2_dma_ch *ch, uint32_t val) {
     LOG_DBG("G2: Write 0x%08x to %stsel\n", (unsigned)val, ch->name);
+
+    if (val & 2) {
+        error_set_feature("a bit in the TSEL register that I don't understand");
+        RAISE_ERROR(ERROR_UNIMPLEMENTED);
+    }
+
     ch->tsel = val;
 }
 
@@ -227,7 +233,14 @@ static void g2_dma_write_en(struct g2_dma_ch *ch, uint32_t val) {
 }
 
 static uint32_t g2_dma_read_susp(struct g2_dma_ch *ch) {
-    uint32_t val = ch->susp;
+    uint32_t val = 0;
+
+    if (ch->tsel & (1 << 2)) {
+        // TODO: I don't understand what the difference between bits 4 and 5 is
+        if (!ch->xfer_in_progress)
+            val |= ((1 << 4) | (1 << 5));
+    }
+
     LOG_DBG("G2: Read 0x%08x from %ssusp\n", (unsigned)val, ch->name);
     return val;
 }
@@ -235,6 +248,17 @@ static uint32_t g2_dma_read_susp(struct g2_dma_ch *ch) {
 static void g2_dma_write_susp(struct g2_dma_ch *ch, uint32_t val) {
     LOG_DBG("G2: Write 0x%08x to %ssusp\n", (unsigned)val, ch->name);
     ch->susp = val;
+
+    if (ch->tsel & (1 << 2)) {
+        if (val & 1) {
+            /*
+             * TODO: maybe only raise an error if there's actually a transfer
+             * in progress?
+             */
+            error_set_feature("Suspending a G2 DMA transfer");
+            RAISE_ERROR(ERROR_UNIMPLEMENTED);
+        }
+    }
 }
 
 static uint32_t g2_dma_read_dir(struct g2_dma_ch *ch) {
