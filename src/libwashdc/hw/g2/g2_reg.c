@@ -135,6 +135,8 @@ static uint8_t reg_backing[N_G2_REGS];
 struct g2_dma_ch {
     uint32_t tsel, dir, star, stag, len, st, en, susp;
 
+    bool xfer_in_progress;
+
     void(*do_xfer)(uint32_t src_addr, uint32_t dst_addr, unsigned n_bytes);
 
     char const *name;
@@ -173,11 +175,18 @@ static uint32_t g2_dma_read_st(struct g2_dma_ch *ch) {
 
 static void g2_dma_write_st(struct g2_dma_ch *ch, uint32_t val) {
     LOG_DBG("G2: Write 0x%08x to %sst\n", (unsigned)val, ch->name);
+
     if (val) {
         LOG_DBG("G2: %sdir is %d\n", ch->name, (int)ch->dir);
         LOG_DBG("G2: %stsel is %d\n", ch->name, (int)ch->tsel);
         if (ch->dir)
             RAISE_ERROR(ERROR_UNIMPLEMENTED);
+
+        if (!(ch->en & 1)) {
+            // docs say you're not allowed to do this.
+            error_set_feature("trying to start a G2 DMA transfer while it's disabled");
+            RAISE_ERROR(ERROR_UNIMPLEMENTED);
+        }
 
         uint32_t src_addr =
             ch->star & ~(BIT_RANGE(0, 4) | BIT_RANGE(29, 31));
@@ -210,6 +219,11 @@ static uint32_t g2_dma_read_en(struct g2_dma_ch *ch) {
 static void g2_dma_write_en(struct g2_dma_ch *ch, uint32_t val) {
     LOG_DBG("G2: Write 0x%08x to %sen\n", (unsigned)val, ch->name);
     ch->en = val;
+    if (ch->xfer_in_progress && !(ch->en & 1)) {
+        // according to docs this will abort a transfer
+        error_set_feature("cancelling a G2 DMA by disabling mid-transfer");
+        RAISE_ERROR(ERROR_UNIMPLEMENTED);
+    }
 }
 
 static uint32_t g2_dma_read_susp(struct g2_dma_ch *ch) {
@@ -331,6 +345,7 @@ static void post_delay_aica_dma_int(struct SchedEvent *event) {
     holly_raise_nrm_int(HOLLY_REG_ISTNRM_AICA_DMA_COMPLETE); // ?
     sched_aica_dma_event = false;
     dma_ch_ad.st = 0;
+    dma_ch_ad.xfer_in_progress = false;
 }
 
 static void
@@ -345,6 +360,8 @@ g2_dma_ad_xfer(uint32_t src_addr, uint32_t dst_addr, unsigned n_bytes) {
             n_bytes, (unsigned)src_addr, (unsigned)dst_addr);
 
     sh4_dmac_transfer_words(dreamcast_get_cpu(), src_addr, dst_addr, n_words);
+
+    dma_ch_ad.xfer_in_progress = true;
 
     aica_dma_raise_event.handler = post_delay_aica_dma_int;
     aica_dma_raise_event.when =
