@@ -194,6 +194,10 @@ static void g2_dma_write_st(struct g2_dma_ch *ch, uint32_t val) {
             ch->stag & ~(BIT_RANGE(0, 4) | BIT_RANGE(29, 31));
         unsigned n_bytes = ch->len & BIT_RANGE(5, 24);
 
+        // I think when n_bytes is 0 then its supposed to be 32MB ?
+        if (!n_bytes)
+            RAISE_ERROR(ERROR_UNIMPLEMENTED);
+
         ch->do_xfer(src_addr, dst_addr, n_bytes);
     }
     ch->st = val;
@@ -207,6 +211,11 @@ static uint32_t g2_dma_read_tsel(struct g2_dma_ch *ch) {
 
 static void g2_dma_write_tsel(struct g2_dma_ch *ch, uint32_t val) {
     LOG_DBG("G2: Write 0x%08x to %stsel\n", (unsigned)val, ch->name);
+
+    if ((val & 3) && ch->en) {
+        error_set_feature("HW trigger G2 DMA");
+        RAISE_ERROR(ERROR_UNIMPLEMENTED);
+    }
 
     if (val & 2) {
         error_set_feature("a bit in the TSEL register that I don't understand");
@@ -224,6 +233,12 @@ static uint32_t g2_dma_read_en(struct g2_dma_ch *ch) {
 
 static void g2_dma_write_en(struct g2_dma_ch *ch, uint32_t val) {
     LOG_DBG("G2: Write 0x%08x to %sen\n", (unsigned)val, ch->name);
+
+    if (val && (ch->tsel & 3)) {
+        error_set_feature("HW trigger G2 DMA");
+        RAISE_ERROR(ERROR_UNIMPLEMENTED);
+    }
+
     ch->en = val;
     if (ch->xfer_in_progress && !(ch->en & 1)) {
         // according to docs this will abort a transfer
