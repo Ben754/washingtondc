@@ -386,6 +386,7 @@ static void post_delay_aica_dma_int(struct SchedEvent *event) {
     sched_aica_dma_event = false;
     dma_ch_ad.st = 0;
     dma_ch_ad.xfer_in_progress = false;
+    dma_ch_ad.en = dma_ch_ad.len & (1 << 31) ? 0 : 1;
 }
 
 static void
