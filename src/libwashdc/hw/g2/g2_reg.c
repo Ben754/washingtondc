@@ -366,6 +366,7 @@ static struct SchedEvent aica_dma_raise_event;
 static bool sched_aica_dma_event;
 
 static void post_delay_aica_dma_int(struct SchedEvent *event) {
+    LOG_DBG("G2: AICA DMA operation complete");
     holly_raise_nrm_int(HOLLY_REG_ISTNRM_AICA_DMA_COMPLETE); // ?
     sched_aica_dma_event = false;
     dma_ch_ad.st = 0;
