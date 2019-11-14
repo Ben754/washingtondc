@@ -250,7 +250,7 @@ static void g2_dma_write_susp(struct g2_dma_ch *ch, uint32_t val) {
     ch->susp = val;
 
     if (ch->tsel & (1 << 2)) {
-        if (val & 1) {
+        if ((val & 1) && ch->xfer_in_progress) {
             /*
              * TODO: maybe only raise an error if there's actually a transfer
              * in progress?
