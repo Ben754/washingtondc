@@ -120,7 +120,7 @@ static dc_cycle_stamp_t aica_dma_complete_int_delay(size_t n_bytes) {
         return 0;
     double us = linear - constant;
     dc_cycle_stamp_t ret =  (dc_cycle_stamp_t)(us * (double)SCHED_FREQUENCY / 1000000.0);
-    return ret;
+    return ret / 2;
 }
 #define AICA_DMA_COMPLETE_INT_DELAY aica_dma_complete_int_delay
 

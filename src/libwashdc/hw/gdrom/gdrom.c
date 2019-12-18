@@ -73,7 +73,7 @@ static void post_delay_gdrom_delayed_processing(struct SchedEvent *event);
 // how long to wait before raising a gdrom interrupt event.
 // this value is arbitrary and completely made up.
 // TODO: come up with some latency measurements on real hardware.
-#define GDROM_INT_DELAY (SCHED_FREQUENCY / 1024)
+#define GDROM_INT_DELAY (SCHED_FREQUENCY / (4*1024))
 
 /* static bool gdrom_int_scheduled; */
 /* struct SchedEvent gdrom_int_raise_event = { */

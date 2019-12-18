@@ -362,7 +362,7 @@ pvr2_reg_do_read(struct pvr2 *pvr2, unsigned addr) {
              "%s at line %d of %s\n", __func__, __LINE__, __FILE__);
         PVR2_TRACE("reading 0x%08x from TA_NEXT_OPB\n",
                    (unsigned)reg_backing[PVR2_TA_NEXT_OPB]);
-        return reg_backing[PVR2_TA_NEXT_OPB];
+        return reg_backing[PVR2_TA_NEXT_OPB] += 128;
     case PVR2_TA_RESET:
         LOG_DBG("reading 0 from TA_RESET\n");
         return 0;
