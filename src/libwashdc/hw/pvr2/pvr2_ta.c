@@ -201,7 +201,7 @@ static void pvr2_render_complete_int_event_handler(struct SchedEvent *event);
  * which can cause them to miss interrupts.
  *
  */
-#define PVR2_LIST_COMPLETE_INT_DELAY (SCHED_FREQUENCY / (1024*4))
+#define PVR2_LIST_COMPLETE_INT_DELAY (SCHED_FREQUENCY / (1024*16))
 
 static void pvr2_op_complete_int_event_handler(struct SchedEvent *event);
 static void pvr2_op_mod_complete_int_event_handler(struct SchedEvent *event);
