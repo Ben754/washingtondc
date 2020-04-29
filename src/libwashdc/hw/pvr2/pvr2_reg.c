@@ -77,7 +77,6 @@ pvr2_reg_do_write(struct pvr2 *pvr2, unsigned addr, uint32_t val) {
     PVR2_REG_WRITE_CASE(PVR2_SB_PDEN);
     PVR2_REG_WRITE_CASE(PVR2_SB_PDST);
     PVR2_REG_WRITE_CASE(PVR2_SB_PDAPRO);
-    PVR2_REG_WRITE_CASE(PVR2_SOFTRESET);
     PVR2_REG_WRITE_CASE(PVR2_PARAM_BASE);
     PVR2_REG_WRITE_CASE(PVR2_REGION_BASE);
     PVR2_REG_WRITE_CASE(PVR2_SPAN_SORT_CFG);
@@ -89,7 +88,6 @@ pvr2_reg_do_write(struct pvr2 *pvr2, unsigned addr, uint32_t val) {
     PVR2_REG_WRITE_CASE(PVR2_FB_W_SOF2);
     PVR2_REG_WRITE_CASE(PVR2_ISP_BACKGND_T);
     PVR2_REG_WRITE_CASE(PVR2_ISP_BACKGND_D);
-    PVR2_REG_WRITE_CASE(PVR2_TA_GLOB_TILE_CLIP);
     PVR2_REG_WRITE_CASE(PVR2_FB_X_CLIP);
     PVR2_REG_WRITE_CASE(PVR2_FB_Y_CLIP);
     PVR2_REG_WRITE_CASE(PVR2_FPU_SHAD_SCALE);
@@ -113,9 +111,8 @@ pvr2_reg_do_write(struct pvr2 *pvr2, unsigned addr, uint32_t val) {
     PVR2_REG_WRITE_CASE(PVR2_VO_STARTX);
     PVR2_REG_WRITE_CASE(PVR2_VO_STARTY);
     PVR2_REG_WRITE_CASE(PVR2_TA_OL_BASE);
-    PVR2_REG_WRITE_CASE(PVR2_TA_ISP_LIMIT);
+    PVR2_REG_WRITE_CASE(PVR2_TA_VERTBUF_LIMIT);
     PVR2_REG_WRITE_CASE(PVR2_TA_OL_LIMIT);
-    PVR2_REG_WRITE_CASE(PVR2_TA_ALLOC_CTRL);
     PVR2_REG_WRITE_CASE(PVR2_TA_NEXT_OPB_INIT);
     PVR2_REG_WRITE_CASE(PVR2_ID);
     case PVR2_REV:
@@ -131,6 +128,8 @@ pvr2_reg_do_write(struct pvr2 *pvr2, unsigned addr, uint32_t val) {
         pvr2->ta.pt_alpha_ref = val;
         break;
     case PVR2_STARTRENDER:
+        LOG_DBG("PVR2 starting render with PARAM_BASE=%08X, REGION_BASE=%08X\n",
+                (unsigned)reg_backing[PVR2_PARAM_BASE], (unsigned)reg_backing[PVR2_REGION_BASE]);
         reg_backing[PVR2_STARTRENDER] = val;
         pvr2_ta_startrender(pvr2);
         break;
@@ -205,12 +204,13 @@ pvr2_reg_do_write(struct pvr2 *pvr2, unsigned addr, uint32_t val) {
         pvr2_tex_cache_notify_palette_tp_change(pvr2);
         break;
     case PVR2_TA_VERTBUF_START:
+        PVR2_TRACE("Writing %08X to PVR2_TA_VERTBUF_START\n", (unsigned)val);
         reg_backing[PVR2_TA_VERTBUF_START] = val & ~3;
         break;
     case PVR2_TA_RESET:
         reg_backing[PVR2_TA_RESET] = val;
         if (val & 0x80000000) {
-            LOG_DBG("TA_RESET!\n");
+            PVR2_TRACE("TA_RESET!\n");
             reg_backing[PVR2_TA_VERTBUF_POS] =
                 reg_backing[PVR2_TA_VERTBUF_START];
         } else {
@@ -243,6 +243,39 @@ pvr2_reg_do_write(struct pvr2 *pvr2, unsigned addr, uint32_t val) {
     case PVR2_TA_LIST_CONT:
         if (val)
             pvr2_ta_list_continue(pvr2);
+        break;
+    case PVR2_SOFTRESET:
+        PVR2_TRACE("Writing %08X to SOFTRESET\n", (unsigned)val);
+        reg_backing[PVR2_SOFTRESET] = val;
+        if (val & 1)
+            PVR2_TRACE("\tTA soft reset\n");
+        if (val & 2)
+            PVR2_TRACE("\tCORE pipeline soft reset\n");
+        if (val & 4)
+            PVR2_TRACE("\tPVR2 VRAM soft reset\n");
+        break;
+    case PVR2_TA_ALLOC_CTRL:
+        reg_backing[PVR2_TA_ALLOC_CTRL] = val;
+        PVR2_TRACE("Writing %08X to TA_ALLOC_CTRL\n", (unsigned)val);
+        PVR2_TRACE("\tOPB mode is %s\n",
+                   val & (1 << 20) ? "decreasing" : "increasing");
+        PVR2_TRACE("\tpunch-through unit size is %u\n",
+                   (unsigned)((val & BIT_RANGE(16,17))>>16));
+        PVR2_TRACE("\ttransparent-modifier unit size is %u\n",
+                   (unsigned)((val & BIT_RANGE(12,13))>>12));
+        PVR2_TRACE("\ttransparent unit size is %u\n",
+                   (unsigned)((val & BIT_RANGE(8,9))>>8));
+        PVR2_TRACE("\topaque-modifier unit size is %u\n",
+                   (unsigned)((val & BIT_RANGE(4,5))>>4));
+        PVR2_TRACE("\topaque unit size is %u\n",
+                   (unsigned)(val & BIT_RANGE(0,1)));
+        break;
+    case PVR2_TA_GLOB_TILE_CLIP:
+        reg_backing[PVR2_TA_GLOB_TILE_CLIP] = val;
+        PVR2_TRACE("Writing %08X to TA_GLOB_TILE_CLIP\n", (unsigned)val);
+        PVR2_TRACE("\ttile clip set to %ux%u tiles\n",
+                   1 + ((((unsigned)val) & BIT_RANGE(16, 19)) >> 16),
+                   (1 + (((unsigned)val) & BIT_RANGE(0, 5))));
         break;
     default:
         if (idx >= PVR2_FOG_TABLE_FIRST && idx <= PVR2_FOG_TABLE_LAST) {
@@ -323,7 +356,7 @@ pvr2_reg_do_read(struct pvr2 *pvr2, unsigned addr) {
     PVR2_REG_READ_CASE(PVR2_VO_STARTY);
     PVR2_REG_READ_CASE(PVR2_PALETTE_TP);
     PVR2_REG_READ_CASE(PVR2_TA_OL_BASE);
-    PVR2_REG_READ_CASE(PVR2_TA_ISP_LIMIT);
+    PVR2_REG_READ_CASE(PVR2_TA_VERTBUF_LIMIT);
     PVR2_REG_READ_CASE(PVR2_TA_VERTBUF_POS);
     PVR2_REG_READ_CASE(PVR2_TA_OL_LIMIT);
     PVR2_REG_READ_CASE(PVR2_TA_ALLOC_CTRL);
@@ -360,11 +393,13 @@ pvr2_reg_do_read(struct pvr2 *pvr2, unsigned addr) {
     case PVR2_SPG_STATUS:
         return pvr2_spg_get_status(pvr2);
     case PVR2_TA_VERTBUF_START:
+        PVR2_TRACE("Reading %08X from PVR2_TA_VERTBUF_START\n",
+                   (unsigned)reg_backing[PVR2_TA_VERTBUF_START]);
         return reg_backing[PVR2_TA_VERTBUF_START];
     case PVR2_TA_NEXT_OPB:
             // TODO: actually track the positions of where the OPB blocks should go
         LOG_WARN("You should *really* come up with a real implementation of "
-             "%s at line %d of %s\n", __func__, __LINE__, __FILE__);
+                 "%s at line %d of %s\n", __func__, __LINE__, __FILE__);
         PVR2_TRACE("reading 0x%08x from TA_NEXT_OPB\n",
                    (unsigned)reg_backing[PVR2_TA_NEXT_OPB]);
         return reg_backing[PVR2_TA_NEXT_OPB];

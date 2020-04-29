@@ -981,6 +981,8 @@ static void handle_packet(struct pvr2 *pvr2) {
 }
 
 void pvr2_tafifo_input(struct pvr2 *pvr2, uint32_t dword) {
+    PVR2_TRACE("Input %08X to PVR2 TAFIFO\n", (unsigned)dword);
+
     struct pvr2_ta *ta = &pvr2->ta;
     ta->ta_fifo32[ta->ta_fifo_word_count++] = dword;
 
@@ -1509,9 +1511,14 @@ static void pvr2_render_complete_int_event_handler(struct SchedEvent *event) {
 }
 
 void pvr2_ta_startrender(struct pvr2 *pvr2) {
-    PVR2_TRACE("STARTRENDER requested!\n");
     struct pvr2_ta *ta = &pvr2->ta;
     struct gfx_il_inst cmd;
+
+    PVR2_TRACE("STARTRENDER requested!\n");
+    PVR2_TRACE("\tPVR2_PARAM_BASE = %08X\n",
+               (unsigned)pvr2->reg_backing[PVR2_PARAM_BASE]);
+    PVR2_TRACE("\tPVR2_REGION_BASE = %08X\n",
+               (unsigned)pvr2->reg_backing[PVR2_REGION_BASE]);
 
     unsigned tile_w = get_glob_tile_clip_x(pvr2) << 5;
     unsigned tile_h = get_glob_tile_clip_y(pvr2) << 5;
